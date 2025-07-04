@@ -25,7 +25,7 @@ export default async function handler(req, res) {
   const data = await response.json();
 
   const mockResponse = [
-    "Option 1: Smooth opener",
+    "Option 1: Smooth opener deploy test",
     "Option 2: Witty compliment",
     "Option 3: Cheeky tease",
     "Option 4: Confident closer"
