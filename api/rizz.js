@@ -20,7 +20,6 @@ export default async function handler(req, res) {
     typeof image_base64 !== 'string' ||
     !vibe ||
     !allowedVibes.includes(vibe) ||
-    !conversation_history ||
     typeof conversation_history !== 'string' ||
     !language ||
     typeof language !== 'string'
@@ -30,12 +29,17 @@ export default async function handler(req, res) {
 
   const apiKey = process.env.GOOGLE_CLOUD_API_KEY;
 
-  // Extract base64 data from data URL
-  const base64Match = image_base64.match(/^data:(image\/\w+);base64,(.+)$/);
-  if (!base64Match) {
-    return res.status(400).json({ error: 'Bad Request: Invalid image_base64 format' });
+  // Support both data URL and raw base64 string
+  let base64Data;
+  if (image_base64.startsWith('data:image/')) {
+    const base64Match = image_base64.match(/^data:(image\/\w+);base64,(.+)$/);
+    if (!base64Match) {
+      return res.status(400).json({ error: 'Bad Request: Invalid image_base64 format' });
+    }
+    base64Data = base64Match[2];
+  } else {
+    base64Data = image_base64;
   }
-  const base64Data = base64Match[2];
 
   const response = await fetch(
     `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`,
@@ -64,7 +68,7 @@ export default async function handler(req, res) {
     "Option 4: Confident closer"
   ];
 
-  const prompt = `\nYou are a witty assistant helping someone come up with the perfect reply to a visual post or story.\n\nTone: ${vibe}\nLanguage: ${language}\n\n${fullText ? `Text from screenshot:\n"${fullText}"\n` : ''}${labels.length ? `Image context: ${labels.join(', ')}\n` : ''}\nGenerate 4 short, engaging, and creative replies that match the tone and visual impression.\nAvoid repeating the same structure, and make them sound like a real person.\n`;
+  const prompt = `\nYou are a witty assistant helping someone come up with the perfect reply to a visual post or story.\n\nTone: ${vibe}\nLanguage: ${language}\n\n${fullText ? `Text from screenshot:\n"${fullText}"\n` : ''}${labels.length ? `Image context: ${labels.join(', ')}\n` : ''}\nGenerate 5 short, engaging, and creative replies that match the tone and visual impression.\nAvoid repeating the same structure, and make them sound like a real person.\n\nRespond ONLY with a JSON array of 5 strings, nothing else.\n`;
 
   if (!process.env.OPENAI_API_KEY) {
     return res.status(500).json({
@@ -87,11 +91,21 @@ export default async function handler(req, res) {
     });
     if (openaiData.choices && openaiData.choices[0] && openaiData.choices[0].message && openaiData.choices[0].message.content) {
       const raw = openaiData.choices[0].message.content.trim();
-      const split = raw.split(/\n+/).filter(Boolean);
-      if (split.length >= 4) {
-        suggestions = split.slice(0, 4).map(s => s.replace(/^\d+\.|^- /, '').trim());
-      } else {
-        suggestions = [raw];
+      
+      // console.log('Raw OpenAI response:', raw);
+      
+      try {
+        let cleaned = raw
+          .replace(/^\s*```(?:json)?\s*/i, '') // Remove leading ``` or ```json
+          .replace(/\s*```\s*$/, '');          // Remove trailing ```
+        const parsed = JSON.parse(cleaned);
+        if (Array.isArray(parsed) && parsed.length === 5 && parsed.every(s => typeof s === 'string')) {
+          suggestions = parsed;
+        } else {
+          openaiError = 'OpenAI did not return a valid array of 5 strings.';
+        }
+      } catch (e) {
+        openaiError = 'Failed to parse OpenAI response as JSON.';
       }
     } else {
       openaiError = openaiData;
@@ -100,5 +114,6 @@ export default async function handler(req, res) {
     openaiError = err.message || 'OpenAI API error';
   }
 
+  // console.log('Suggestions sent:', suggestions);
   return res.status(200).json({ suggestions, fullText, labels, prompt, openaiError });
 }
