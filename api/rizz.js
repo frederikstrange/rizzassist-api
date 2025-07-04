@@ -6,11 +6,11 @@ export default async function handler(req, res) {
   }
 
   // API Key Authorization
-  const authHeader = req.headers['authorization'];
-  const expectedApiKey = process.env.RIZZASSIST_API_KEY;
-  if (!authHeader || !authHeader.startsWith('Bearer ') || authHeader.split(' ')[1] !== expectedApiKey) {
-    return res.status(403).json({ error: 'Forbidden: Invalid API key' });
-  }
+  // const authHeader = req.headers['authorization'];
+  // const expectedApiKey = process.env.RIZZASSIST_API_KEY;
+  // if (!authHeader || !authHeader.startsWith('Bearer ') || authHeader.split(' ')[1] !== expectedApiKey) {
+  //   return res.status(403).json({ error: 'Forbidden: Invalid API key' });
+  // }
 
   // Parse and validate request body
   const { image_base64, vibe, conversation_history, language } = req.body;
